@@ -252,6 +252,7 @@ Type                Name         Note
 string          group
 string          keyimage   
 labelObj        label
+labelLeaderObj  leader           Read-only
 double          maxscaledenom
 hashTableObj    metadata
 double          minscaledenom
@@ -299,6 +300,9 @@ styleObj getStyle(int index)
 
 string getTextString()
     Returns the text string for the class object.
+
+int insertStyle(styleObj style)
+    Insert the style passed in argument in the classObj. Returns MS_SUCCESS/MS_FAILURE.
         
 int movestyledown(int index)
     The style specified by the style index will be moved down into
@@ -316,6 +320,9 @@ int movestyleup(int index)
 
 int removeMetaData(string name)
     Remove a metadata entry for the class.  Returns MS_SUCCESS/MS_FAILURE.
+
+int removeStyle(int index)
+    Remove and returns the styleObj removed at the specified index.
 
 int set(string property_name, new_value)
     Set object property to a new value.
@@ -335,7 +342,7 @@ int updateFromString(string snippet)
 
     .. code-block:: php
 
-      /*set the color */
+      /*set the color*/ 
       $oClass->updateFromString('CLASS STYLE COLOR 255 0 255 END END');
 
 .. index::
@@ -394,9 +401,10 @@ Members
 =============== ================================================================
 Type                Name
 =============== ================================================================
-int             red
-int             green
+int             alpha
 int             blue
+int             green
+int             red
 =============== ================================================================
 
 Methods
@@ -434,6 +442,7 @@ Members
 Type                Name
 =============== ================================================================
 int             code      //See error code constants above
+int             isreported
 string          message
 string          routine
 =============== ================================================================
@@ -526,6 +535,16 @@ Instance of hashTableObj is always embedded inside the `classObj`_,
    $key = null;
    while ($key = $hashTable->nextkey($key))
      echo "Key: ".$key." value: ".$hashTable->get($key)."<br/>";
+
+Members
+...............................................................................
+
+=============== =================== ============================================
+Type                Name            Note
+=============== =================== ============================================
+int             numitems            Returns the number of items in the HashTable
+                                    . Read-Only.
+=============== =================== ============================================
 
 Methods
 ...............................................................................
@@ -779,6 +798,32 @@ int updateFromString(string snippet)
     Update a label from a string snippet. Returns MS_SUCCESS/MS_FAILURE.
 
 .. index::
+    triple: MapScript; PHP; labelLeaderObj
+
+labelLeaderObj
+^^^^^^^^^^^^^^
+
+Constructor
+...............................................................................
+
+Accessible only through `classObj`_ (class->leader).
+
+Members
+...............................................................................
+
+=============== =================== ============================================
+Type                Name            Note
+=============== =================== ============================================
+int             maxdistance         Read-only
+int             gridstep            Read-only
+=============== =================== ============================================
+
+Methods
+...............................................................................
+
+None
+
+.. index::
    triple: MapScript; PHP; layerObj
 
 layerObj
@@ -806,6 +851,9 @@ Members
 Type                Name            Note
 =============== =================== ============================================
 int             annotate
+string          bandsitem           The attribute from the index file used to
+                                    select the source raster band(s) to be used.
+                                    Normally NULL for deafult bands processing.
 hashTableObj    bindvals
 string          classgroup
 string          classitem
@@ -815,6 +863,7 @@ int             connectiontype      read-only, use setConnectionType() to set it
 string          data
 int             debug
 int             dump                deprecated since 6.0
+rectObj         extent              Read-Only
 string          filteritem
 string          footer
 gridObj         grid                only available on a layer defined as grid (MS_GRATICULE)
@@ -826,13 +875,17 @@ string          labelitem
 double          labelmaxscaledenom
 double          labelminscaledenom
 string          labelrequires
+int             maxclasses          Read-only
 int             maxfeatures
+double          maxgeowidth
 double          maxscaledenom
 hashTableObj    metadata
+double          mingeowidth
 double          minscaledenom
 string          name
 int             num_processing
 int             numclasses          read-only
+int             numitems            Read-only
 colorObj        offsite
 int             opacity
 projectionObj   projection
@@ -1050,6 +1103,19 @@ int queryByFeatures(int slayer)
     message in case nothing was found can be avoided in PHP using 
     the '@' control operator).
 
+int queryByFilter(string string)
+    Query the layer using the filter string passed as argument. 
+    Returns MS_SUCCESS if a result was found or MS_FAILURE if 
+    nothing was found or for any other error (note that the 
+    error message in case nothing was found can be avoided in 
+    PHP using the @ control operator).
+
+int queryByIndex(int tileIndex, int shapeIndex[, int addtoquery])
+    Add a specific shape to the query result. If addtoquery (which is 
+    a non mandatory argument) is set to MS_TRUE, the shape will be added
+    to the existing query list. Default behavior is to free the existing
+    query list and add only the new shape.
+
 int queryByPoint(pointObj point, int mode, double buffer)
     Query layer at point location specified in georeferenced map 
     coordinates (i.e. not pixels).  
@@ -1104,8 +1170,11 @@ int setConnectionType(int connectiontype [,string plugin_library])
     In the case when the layer.connectiontype = MS_PLUGIN the plugin_library
     parameter should also be specified so as to select the library to 
     load by MapServer. For the other connection types this parameter 
-    is not used. 
-    
+    is not used.
+
+int setExtent(int minx, int miny, int maxx, int maxy)
+    Set the extent of the layer. Returns MS_SUCCESS/MS_FAILURE.
+
 int setFilter(string expression)
     Set layer filter :ref:`expression <expressions>`.
 
@@ -1121,6 +1190,12 @@ int setProcessing(string)
 
       $oLayer->setprocessing("SCALE_1=AUTO");
       $oLayer->setprocessing("SCALE_2=AUTO");       
+
+int setProcessingKey(string key, string value)
+    Add or replace a processing directive of the form "key=value".
+    Unlike the addProcessing() call this will replace an existing
+    processing directive for the given key value. Processing directives
+    supported are specific to the layer and underlying renderer.
 
 int setProjection(string proj_params)
     Set layer :ref:`projection <projection>` and coordinate system.
@@ -1246,8 +1321,14 @@ int addXYZ(double x, double y, double z [, double m])
       the 4th parameter m is used for measured shape files only. 
       It is not mandatory.
 
-PointObj point(int i)
-    Returns a reference to point number i.
+pointObj get(int index)
+    Returns the point at the specified index. Index starts at 0.
+
+    .. note:: 
+       This is an alias of point()
+
+pointObj point(int index)
+    Returns the point at the specified index. Index starts at 0.
 
 int project(projectionObj in, projectionObj out)
     Project the line from "in" projection (1st argument) to "out" 
@@ -1289,12 +1370,16 @@ Members
 Type                Name           Note
 =============== ================== =============================================
 double          cellsize
+hashTableObj    configoptions      A hash table of configuration options from 
+                                   CONFIG keywords in the .map. Use getConfigOption 
+                                   and setConfigOption
 int             debug
 double          defresolution      pixels per inch, defaults to 72
-rectObj         extent; 
+rectObj         extent
 string          fontsetfilename    read-only, set by setFontSet()
 int             height             see setSize()
 colorObj        imagecolor
+string          imagetype          Name of the current ouput format
 int             keysizex
 int             keysizey
 int             keyspacingx
@@ -1307,6 +1392,7 @@ int             maxsize
 hashTableObj    metadata
 string          name
 int             numlayers          read-only
+int             numoutputformats    read-only
 outputformatObj outputformat
 projectionObj   projection
 querymapObj     querymap                  
@@ -1324,6 +1410,10 @@ int             width              see setSize()
      
 Methods
 ...............................................................................
+
+int appendOutputFormat(ouputformatObj ouputformat)
+    Appends the outputformat object in the map object. Returns
+    the updated numoutputformats value.
 
 int applyconfigoptions()
     Applies the config options set in the map file. For example
@@ -1437,6 +1527,9 @@ int getMetaData(string name)
 
 int getNumSymbols()
     Return the number of symbols in map.
+
+outputformatObj getOuputFormat(int index)
+    Returns the outputformat at the index position.
    
 string getProjection()
     Returns a string representation of the projection. 
@@ -1552,6 +1645,13 @@ int queryByFeatures(int slayer)
     message in case nothing was found can be avoided in PHP using 
     the '@' control operator).
 
+int queryByFilter(char string)
+    Query all the layer in the map using the filter passed to the function.
+    Returns MS_SUCCESS if a result was found or MS_FAILURE if nothing was
+    found or for any other error (note that the error 
+    message in case nothing was found can be avoided in PHP using 
+    the '@' control operator).
+
 int queryByIndex(layerindex, tileindex, shapeindex[, addtoquery])
     Add a specific shape on a given layer to the query result.
     If addtoquery (which is a non mandatory argument) is set to MS_TRUE,
@@ -1602,6 +1702,10 @@ int removeMetaData(string name)
     Remove a metadata entry for the map (stored in the WEB object in the map
     file).  Returns MS_SUCCESS/MS_FAILURE.
 
+int removeOutputFormat(string name)
+    Remove the specified outputformat from the map Object. Returns
+    MS_SUCCESS/MS_FAILURE.
+
 int save(string filename)
     Save current map object state to a file. Returns -1 on error.
     Use absolute path. If a relative path is used, then it will be 
@@ -1620,6 +1724,9 @@ int saveQuery(string filename[, int results])
     in loadquery). Returns MS_SUCCESS or MS_FAILURE. Either save format can be
     used with loadquery. See RFC 65 and ticket #3647 for details of different
     save formats.
+
+int saveQueryAsGML(string filename[, string namespace])
+    Save the current query in a file in GML format. Returns MS_SUCCESS/MS_FAILURE.
 
 int scaleExtent(double zoomfactor, double minscaledenom, double maxscaledenom)
     Scale the map extent using the zoomfactor and ensure the extent
@@ -1749,31 +1856,41 @@ Constructor
 ...............................................................................
 
 Instance of outputformatObj is always embedded inside the `mapObj`_.
-It is uses a read only.
+It is read only.
 
-No constructor available (coming soon, see ticket 979)
+.. code-block:: php
+
+    new ouputFormatObj(string driver, string name)
 
 Members
 ...............................................................................
 
-=============== =============== ================================================
-Type                Name        Note
-=============== =============== ================================================
+=============== ================ ================================================
+Type                Name         Note
+=============== ================ ================================================
+int             bands            The number of bands in the raster. Only used for
+                                 the "raw" modes, MS_IMAGEMODE_BYTE, MS_IMAGEMODE_INT16
+                                 and MS_IMAGEMODE_FLOAT32. Read-only.
 string          driver
 string          extension
-int             imagemode       MS_IMAGEMODE_* value.
+int             imagemode        MS_IMAGEMODE_* value.
 string          mimetype
 string          name
+int             numformatoptions Read-only.
 int             renderer
 int             transparent
-=============== =============== ================================================
-    
+=============== ================ ================================================
+
 Methods
 ...............................................................................
 
 string getOption(string property_name)
     Returns the associated value for the format option property passed
     as argument. Returns an empty string if property not found.
+
+string getOptionByIndex(int index)
+    Returns a string of the option with its value at the index passed.
+    Throws an exception if the index doesn't exist.
 
 int set(string property_name, new_value)
     Set object property to a new value.
@@ -1817,7 +1934,10 @@ Members
 =============== ================================================================
 Type                Name
 =============== ================================================================
-int             numparams (read-only)  
+string          contenttype (read-only)
+string          httpcookiedata (read-only)
+int             numparams (read-only)
+string          postrequest (read-only)
 int             type (read-only): MS_GET_REQUEST or MS_POST_REQUEST
 =============== ================================================================
 
@@ -1892,11 +2012,18 @@ Methods
 ...............................................................................
 
 double distanceToLine(pointObject p1, pointObject p2)
-    Calculates distance between a point ad a lined defined by the
+    Calculates distance between a point and a line defined by the
     two points passed in argument. 
 
 double distanceToPoint(pointObj poPoint)
    Calculates distance between two points.  
+
+double distanceToSegment(pointObj p1, pointObj p2)
+    Calculates distance between a point and a line defined by the
+    two points passed in argument. 
+
+    .. note:: 
+       This is an alias of distanceToLine()
 
 double distanceToShape(shapeObj shape)
     Calculates the minimum distance between a point and a shape.
@@ -1971,6 +2098,10 @@ Methods
 int getUnits()
     Returns the units of a projection object. Returns -1 on error.
 
+int setWKTProjection(string wkt)
+    Set the projection using the WKT string passed in argument. Returns
+    MS_SUCCESS/MS_FAILURE.
+
 .. index::
    triple: MapScript; PHP; querymapObj
 
@@ -1992,6 +2123,7 @@ Type                Name    Note
 colorObj        color
 int             height
 int             width
+int             status      Read-only
 int             style       MS_NORMAL, MS_HILITE, MS_SELECTED
 =============== =========== ====================================================
  
@@ -2056,6 +2188,9 @@ int draw(mapObj map, layerObj layer, imageObj img, int class_index, string text)
 
 double fit(int width, int height)
     Adjust extents of the rectangle to fit the width/height specified.
+
+double getCenter()
+    Returns the center of the rectObj.
 
 int project(projectionObj in, projectionObj out)
     Project the rectangle from "in" projection (1st argument) to "out" 
@@ -2229,6 +2364,8 @@ Members
 Type                Name   Note
 =============== ========== =====================================================
 rectObj         bounds     read-only
+int             isopen     MS_TRUE/MS_FALSE. read-only
+int             lastshape  Returns the index of the last shape read. Read-only
 int             numshapes  read-only
 string          source     read-only
 int             type       read-only
@@ -2305,6 +2442,7 @@ int             classindex
 int             index     
 int             numlines    read-only
 int             numvalues   read-only
+int             resultindex read-only
 int             tileindex   read-only
 string          text
 int             type        read-only
@@ -2357,6 +2495,12 @@ shapeobj difference(shapeobj shape)
     Returns a shape object representing the difference of the
     shape object with the one passed as parameter. 
     Only available if php/mapscript is built with GEOS library.
+
+double distanceToPoint(pointObj point)
+    Returns the distance from the point to the shape.
+
+double distanceToShape(shapeObj shape)
+    Returns the distance between the two shapes.
 
 int disjoint(shapeobj shape)  
     Returns true if the shape passed as argument is disjoint to the 
@@ -2503,9 +2647,12 @@ double          angle
 int             antialias
 colorObj        backgroundcolor
 colorObj        color
+double          initialgap
+double          maxscaledenom
 double          maxsize 
 double          maxvalue
 double          maxwidth
+double          minscaledenom
 double          minsize 
 double          minvalue
 double          minwidth
@@ -2605,6 +2752,8 @@ Members
 =============== ================= ==============================================
 Type                Name          Note
 =============== ================= ==============================================
+double          anchorpoint_x
+double          anchorpoint_y
 int             antialias 
 string          character 
 int             filled
@@ -2612,10 +2761,15 @@ string          font
 string          imagepath         read-only
 int             inmapfile         If set to TRUE, the symbol will be saved
                                   inside the mapfile.
-int             patternlength     read-only
-int             position
 string          name
 int             numpoints         read-only
+double          maxx
+double          maxy
+double          minx
+double          miny
+int             patternlength     read-only
+int             position
+string          svg_text
 double          sizex
 double          sizey
 int             transparent 
@@ -2630,6 +2784,9 @@ void free()
     Note that you have to unset the php variable to free totally the
     resources.
 
+imageObj getImage(ouputformatObj outputFrmt)
+    Returns the image.
+
 array getPatternArray()  
     Returns an array containing the pattern. If there is no pattern, it
     returns an empty array.
@@ -2641,6 +2798,9 @@ array getPointsArray()
 
 int set(string property_name, new_value)
     Set object property to a new value.
+
+int setImage(imageObj image)
+    Set the image of the symbol. Returns MS_SUCCESS/MS_FAILURE
 
 int setImagePath(char filename)
     Loads a pixmap symbol specified by the filename. 
@@ -2735,6 +2895,7 @@ string          mintemplate
 string          queryformat
 string          template      
 string          temppath
+hastTableObj    validation      read-only
 =============== =============== ================================================
 
 Methods
